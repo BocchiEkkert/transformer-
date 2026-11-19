@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformer 图解版｜用 “I like cat” 走一遍</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#faf8f4; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e7e2d8;
+  --q:#3b6fd4; --k:#e08a1e; --v:#2e9e6b; --acc:#7c5cd6; --warn:#d9534f;
+  --q-bg:#e8effc; --k-bg:#fdf1de; --v-bg:#e4f5ec; --acc-bg:#efeafb; --plain:#fff7d6;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.85 -apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif}
+.layout{display:flex;max-width:1180px;margin:0 auto}
+nav{position:sticky;top:0;align-self:flex-start;height:100vh;overflow:auto;width:220px;flex:none;
+  padding:28px 14px 28px 20px;font-size:13.5px;border-right:1px solid var(--line)}
+nav b{display:block;margin-bottom:10px;font-size:14px}
+nav a{display:block;color:var(--muted);text-decoration:none;padding:4px 8px;border-radius:6px;line-height:1.5;margin:1px 0}
+nav a:hover{background:#efe9dc;color:var(--ink)}
+main{flex:1;min-width:0;padding:36px 40px 120px;max-width:900px}
+@media(max-width:900px){nav{display:none}main{padding:24px 18px 100px}}
+h1{font-size:32px;line-height:1.3;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 24px}
+h2{font-size:24px;margin:64px 0 6px;scroll-margin-top:16px}
+h2 .n{display:inline-block;background:var(--ink);color:#fff;border-radius:8px;font-size:15px;padding:0 10px;margin-right:10px;vertical-align:3px;line-height:28px}
+h3{font-size:18px;margin:28px 0 4px;scroll-margin-top:16px}
+p{margin:10px 0}
+code,.mono{font-family:ui-monospace,Menlo,Consolas,monospace;background:#f1ece0;border-radius:4px;padding:1px 6px;font-size:.92em}
+.q{color:var(--q);font-weight:700}.k{color:var(--k);font-weight:700}.v{color:var(--v);font-weight:700}
+.tag{display:inline-block;border-radius:6px;padding:0 8px;font-weight:700;font-size:.9em}
+.tag.q{background:var(--q-bg)}.tag.k{background:var(--k-bg)}.tag.v{background:var(--v-bg)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+.plain{background:var(--plain);border-left:5px solid #f0c431;border-radius:8px;padding:12px 16px;margin:16px 0}
+.plain::before{content:"大白话";display:block;font-weight:700;font-size:13px;color:#8a6d00;margin-bottom:2px}
+.num{background:var(--acc-bg);border-left:5px solid var(--acc);border-radius:8px;padding:12px 16px;margin:16px 0}
+.num::before{content:"带数字看一遍";display:block;font-weight:700;font-size:13px;color:#4f3aa3;margin-bottom:2px}
+.lab{border:2px dashed var(--acc);background:#fff;border-radius:14px;padding:16px 20px;margin:20px 0}
+.lab h4{margin:0 0 8px;color:var(--acc);font-size:15px}
+.lab h4::before{content:"动手试试 · ";font-weight:400}
+details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 16px;margin:14px 0}
+details summary{cursor:pointer;font-weight:600;color:#4b5563}
+details[open] summary{margin-bottom:6px}
+.shape{display:inline-block;font-family:ui-monospace,Menlo,Consolas,monospace;background:#eef2f7;border-radius:6px;padding:0 8px;font-size:.88em;color:#334155}
+.formula{font-family:Cambria,"Times New Roman","Songti SC",serif;font-size:1.08em;text-align:center;background:#fbfaf6;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0;overflow-x:auto}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+.flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:14px 0}
+.box{background:#fff;border:1.5px solid #cfc7b4;border-radius:10px;padding:8px 12px;font-size:14px;line-height:1.5;text-align:center}
+.box small{display:block;color:var(--muted);font-size:12px}
+.arrow{align-self:center;color:#9a917c;font-size:20px}
+.box.enc{border-color:var(--q);background:var(--q-bg)}
+.box.dec{border-color:var(--acc);background:var(--acc-bg)}
+.box.mem{border-color:var(--v);background:var(--v-bg)}
+.cells{display:inline-flex;gap:2px;vertical-align:middle}
+.cells i{display:block;width:17px;height:17px;border-radius:3px}
+.tok{display:inline-block;background:#1f2937;color:#fff;border-radius:6px;padding:0 10px;font-weight:600;min-width:46px;text-align:center}
+.bar{display:flex;align-items:center;gap:10px;margin:5px 0}
+.bar .lbl{width:64px;text-align:right;font-size:14px;color:#374151}
+.bar .track{flex:1;background:#eee9dd;border-radius:6px;height:24px;overflow:hidden;position:relative}
+.bar .fill{height:100%;border-radius:6px;transition:width .15s}
+.bar .val{width:60px;font-variant-numeric:tabular-nums;font-size:14px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.ctl{display:grid;grid-template-columns:70px 1fr 50px;gap:10px;align-items:center;margin:4px 0;font-size:14px}
+button,.btn{font:inherit;font-size:14px;border:1px solid #cfc7b4;background:#fff;border-radius:8px;padding:3px 12px;cursor:pointer}
+button:hover{background:#f4efe3}
+button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:10px 0}
+th,td{border:1px solid var(--line);padding:6px 10px;text-align:left}
+th{background:#f3eee2}
+.mask{border-collapse:separate;border-spacing:3px;width:auto}
+.mask td{border:none;width:56px;height:38px;text-align:center;border-radius:6px;font-size:13px;padding:0}
+.mask th{background:none;border:none;font-weight:600;font-size:13px;padding:0 6px}
+.ok{background:#cfeedd;color:#14532d}.no{background:#eee;color:#bbb}.sel{outline:2.5px solid var(--acc)}
+.chips span{display:inline-block;margin:2px 4px 2px 0}
+.hint{color:var(--muted);font-size:13.5px}
+.big{font-size:20px}
+.callout-end{background:var(--ink);color:#fff;border-radius:14px;padding:18px 24px;margin:20px 0}
+.callout-end p{margin:6px 0}
+svg text{font-family:inherit}
+.formula.std{white-space:pre-line;line-height:1.9;position:relative;padding-top:20px;border-color:#d8cfe9;background:#faf8fe}
+.formula.std::before{content:"标准公式";position:absolute;left:10px;top:2px;font:700 11px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#6b4fc0;letter-spacing:.5px}
+.formula .where{display:block;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.6}
+.info .formula{margin:8px 0;font-size:1.02em}
+
+/* ---------- 交互式架构图 ---------- */
+.arch-wrap{background:#fff;border:2px solid var(--ink);border-radius:16px;padding:14px 16px 16px;margin:18px 0}
+.arch-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.arch-bar .sp{flex:1}
+.arch-bar label{font-size:14px;cursor:pointer;user-select:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted);margin:2px 0 6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid;vertical-align:-1px;margin-right:4px}
+#archSvg{width:100%;height:auto;display:block;max-height:820px}
+#archSvg .blk{cursor:pointer}
+#archSvg .blk rect{transition:all .18s}
+#archSvg .blk text{pointer-events:none}
+#archSvg .blk:hover rect{filter:brightness(.96);stroke-width:3}
+#archSvg .blk.done rect{stroke-width:2.2}
+#archSvg .blk.dim{opacity:.38}
+#archSvg .blk.active rect{stroke-width:4;filter:drop-shadow(0 0 6px rgba(124,92,214,.55))}
+#archSvg .blk.active{opacity:1}
+#archSvg .edge{stroke:#9a917c;stroke-width:2;fill:none}
+#archSvg .edge.hot{stroke:var(--acc);stroke-width:3.2}
+#archSvg .res{stroke:#d9534f;stroke-width:1.8;fill:none;stroke-dasharray:5 3}
+#archSvg .res.hot{stroke-width:3.2}
+#archSvg .mlink{stroke:var(--v);stroke-width:2.2;fill:none;stroke-dasharray:6 4}
+#archSvg .mlink.hot{stroke-width:4}
+.flowdot{fill:var(--acc)}
+.info{border:1px solid var(--line);border-left:6px solid var(--acc);background:#fbfaf6;border-radius:10px;padding:10px 16px 12px;margin-top:10px;min-height:150px}
+.info h4{margin:0 0 2px;font-size:17px}
+.info .meta{font-size:13px;color:var(--muted);margin-bottom:4px}
+.info p{margin:6px 0;font-size:15px;line-height:1.75}
+.info a{color:var(--acc);font-weight:600;text-decoration:none}
+.info a:hover{text-decoration:underline}
+.stepno{display:inline-block;background:var(--ink);color:#fff;border-radius:999px;font-size:12px;padding:0 9px;margin-right:6px;vertical-align:2px}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>目录</b>
+  <a href="#s0">0 先看全貌</a>
+  <a href="#arch" style="padding-left:20px">↳ 交互式架构图</a>
+  <a href="#s1">1 词变成向量</a>
+  <a href="#s2">2 位置编码</a>
+  <a href="#s3">3 自注意力：Q K V</a>
+  <a href="#s4">4 为什么除以 √5</a>
+  <a href="#s5">5 Softmax 和乘 V</a>
+  <a href="#s6">6 多头注意力</a>
+  <a href="#s7">7 残差与层归一化</a>
+  <a href="#s8">8 前馈网络 FFN</a>
+  <a href="#s9">9 编码器交出什么</a>
+  <a href="#s10">10 解码器入口与掩码</a>
+  <a href="#s11">11 交叉注意力</a>
+  <a href="#s12">12 输出：Linear + Softmax</a>
+  <a href="#s13">13 一页总结</a>
+  <a href="#s14">14 常见疑问</a>
+</nav>
+<main>
+
+<h1>Transformer 图解版</h1>
+<p class="sub">用 “I like cat → 我喜欢猫” 走完一遍完整的推理过程。每一节先讲直觉，再放图，最后才是公式；带“动手试试”的地方可以拖动滑块自己玩。<br>
+<span class="hint">本页改写自你的 Notion 教程《Transformer 推理数据流｜以 I like cat 为例》，数字沿用原文（模型维度 10、两个头、每头 5 维）。标注“示意”的数值是为了讲解而假设的，不是真实训练出来的。</span></p>
+
+<div class="card">
+<b>读这篇之前，先记住三种颜色，后面一直用：</b><br>
+<span class="tag q">Q 查询</span> 我想找什么
+<span class="tag k">K 键</span> 我能被怎么找到
+<span class="tag v">V 值</span> 找到我之后，你实际拿走的内容
+</div>
+
+<!-- ======================= 0 ======================= -->
+<h2 id="s0"><span class="n">0</span>先看全貌：它到底在干什么？</h2>
+<p>Transformer 最早是做<b>机器翻译</b>的：输入英文 <code>I like cat</code>，输出中文 <code>我喜欢猫</code>。它由两半组成：</p>
+<div class="grid2">
+  <div class="card" style="border-color:var(--q)"><b style="color:var(--q)">编码器 Encoder：“读懂原文”</b><br>把英文三个词读一遍，给每个词生成一个<b>带着整句上下文</b>的向量。读完只做一次。</div>
+  <div class="card" style="border-color:var(--acc)"><b style="color:var(--acc)">解码器 Decoder：“边看原文边写译文”</b><br>从开始符出发，每次结合“原文理解 + 已经写出的中文”，<b>只预测下一个字</b>，一直写到结束符。</div>
+</div>
+
+<div class="card">
+<div class="flow">
+  <div class="box"><span class="tok">I like cat</span><small>英文输入</small></div><div class="arrow">→</div>
+  <div class="box enc">词嵌入 + 位置<small>§1 §2</small></div><div class="arrow">→</div>
+  <div class="box enc">自注意力<small>§3–§6</small></div><div class="arrow">→</div>
+  <div class="box enc">加&amp;归一化<small>§7</small></div><div class="arrow">→</div>
+  <div class="box enc">前馈网络<small>§8</small></div><div class="arrow">→</div>
+  <div class="box mem"><b>M</b><small>原文理解 §9</small></div>
+</div>
+<div class="flow">
+  <div class="box"><span class="tok">&lt;SOS&gt; 我</span><small>已写出的译文</small></div><div class="arrow">→</div>
+  <div class="box dec">嵌入 + 位置 + 掩码自注意力<small>§10</small></div><div class="arrow">→</div>
+  <div class="box dec">交叉注意力：去 <b>M</b> 里查<small>§11</small></div><div class="arrow">→</div>
+  <div class="box dec">前馈网络<small>§8</small></div><div class="arrow">→</div>
+  <div class="box dec">Linear + Softmax<small>§12</small></div><div class="arrow">→</div>
+  <div class="box"><span class="tok">喜欢</span><small>下一个词</small></div>
+</div>
+<div class="hint">真实模型会把“注意力→加&amp;归一化→前馈→加&amp;归一化”这一块堆叠很多层（原论文是 6 层），这里只演示一层。</div>
+</div>
+
+<div class="plain">
+把整个 Transformer 想象成<b>一间会议室</b>：每个词是一个与会者，手里拿着一个小本子（向量）。<br>
+<b>注意力</b> = 开会交流：每个人问一圈“谁跟我有关”，把相关的人说的话摘抄到自己的本子上。<br>
+<b>前馈网络</b> = 散会后各自消化：每个人独立地把本子上的内容整理、推理。<br>
+<b>开会 + 消化</b>反复很多轮，每个人对整句话的理解就一层比一层深。
+</div>
+
+<h3 id="arch">交互式架构图：点任意方块，或者一步步“走”一遍</h3>
+<p>这是经典的 Transformer 架构图（左边编码器，右边解码器）。<b>点击任意方块</b>查看它做什么、张量形状是多少、对应哪一节；也可以按“下一步”，让数据按 “I like cat → 我喜欢猫” 的顺序从下往上流一遍。</p>
+
+<div class="arch-wrap">
+  <div class="arch-bar">
+    <button id="aPrev">← 上一步</button>
+    <button id="aNext">下一步 →</button>
+    <button id="aPlay">▶ 自动播放</button>
+    <button id="aReset">重置</button>
+    <span class="sp"></span>
+    <label><input type="checkbox" id="aRes" checked> 显示残差连接</label>
+  </div>
+  <div class="legend">
+    <span><i style="background:#e4f5ec;border-color:#2e9e6b"></i>嵌入 / 位置</span>
+    <span><i style="background:#fdf1de;border-color:#e08a1e"></i>注意力</span>
+    <span><i style="background:#fff7d6;border-color:#d4a90f"></i>加 &amp; 归一化</span>
+    <span><i style="background:#e8effc;border-color:#3b6fd4"></i>前馈网络</span>
+    <span><i style="background:#efeafb;border-color:#7c5cd6"></i>输出层</span>
+    <span style="color:#d9534f">┄ 残差</span>
+    <span style="color:#2e9e6b">┄ 编码器 M → 解码器 K、V</span>
+  </div>
+  <svg id="archSvg" viewBox="0 0 780 720" role="img" aria-label="Transformer 架构图"></svg>
+  <div class="info" id="archInfo"></div>
+</div>
+
+<!-- ======================= 1 ======================= -->
+<h2 id="s1"><span class="n">1</span>词是怎么变成数字的？（Embedding）</h2>
+<p>计算机不认识 “cat”，只认识数字。所以第一步是<b>查表</b>：</p>
+<p>① 分词：<code>I like cat</code> → 三个 token。词表里约定 I=0、like=1、cat=2，所以得到 ID 序列 <code>[0, 1, 2]</code>。<br>
+② 查表：有一张训练好的大表 <b>E</b>，每一行是一个词的 10 维向量。用 ID 当行号取出三行，按原顺序叠起来，就得到一个 <span class="shape">3×10</span> 的矩阵。</p>
+<div class="formula std">X<sub>emb</sub> = E[id<sub>1..n</sub>] = OneHot(id)·E，　E ∈ ℝ<sup>|V|×d<sub>model</sub></sup>
+<span class="where">|V| 为词表大小，d<sub>model</sub> 为模型维度，n 为序列长度。本页：|V|=3（源语言示意），d<sub>model</sub>=10，n=3，所以 X<sub>emb</sub> ∈ ℝ<sup>3×10</sup>。</span></div>
+<div class="card" id="fig-embed"></div>
+<div class="plain">这张表就像一本“词的身份证册”：每个词有一串 10 个数字的特征。训练的时候，意思相近的词会慢慢得到相近的数字。推理时表是<b>固定</b>的，cat 的向量只由它的 ID 决定——同一个词不管在什么句子里，这一步查到的都一样。</div>
+<p class="hint">形状变化（带 batch 维）：<span class="shape">[1,3]</span> → <span class="shape">[1,3,10]</span>，即 1 句话、3 个词、每词 10 个特征。图中颜色深浅只是随手画的示意，不是真实数值。</p>
+
+<!-- ======================= 2 ======================= -->
+<h2 id="s2"><span class="n">2</span>位置编码：告诉模型“谁在第几个”</h2>
+<p>注意力是<b>同时看所有词</b>的，它天生不知道顺序。“猫喜欢我”和“我喜欢猫”如果只看词袋，是一模一样的。所以要给每个词再<b>加上一个位置向量</b>：</p>
+<div class="formula">X<sub>p</sub> = √10 · E[ID<sub>p</sub>] + PE(p)</div>
+<div class="formula std">X = √d<sub>model</sub> · X<sub>emb</sub> + PE，　PE ∈ ℝ<sup>n×d<sub>model</sub></sup>
+<span class="where">PE 的具体定义见本节末尾折叠框。</span></div>
+<p>原论文用的是<b>固定公式</b>（不用训练）生成位置向量：把 10 维拆成 5 对 (sin, cos)，每一对用一个不同的“频率”。</p>
+
+<div class="plain">
+把每一对 (sin, cos) 想成<b>一个时钟的指针</b>：位置越靠后，指针转得越多。<br>
+有的钟转得飞快（秒针），有的钟转得极慢（时针）。一个词在第 p 个位置，就是<b>读一下所有钟现在的指针方向</b>。快慢钟合起来，就能唯一确定“你在第几位”，就像秒针 + 分针 + 时针能读出具体时刻。
+</div>
+
+<div class="lab">
+<h4>拖动位置，看三个“时钟”怎么转</h4>
+<div class="ctl"><span>位置 p</span><input id="posSlider" type="range" min="0" max="20" step="1" value="2"><b id="posVal">2</b></div>
+<div class="row"><button onclick="setPos(0)">I（p=0）</button><button onclick="setPos(1)">like（p=1）</button><button onclick="setPos(2)">cat（p=2）</button><button onclick="setPos(15)">看看 p=15</button></div>
+<div id="clocks" class="row" style="justify-content:space-around;margin-top:8px"></div>
+<div class="hint" id="clockNote"></div>
+</div>
+
+<div class="num">
+cat 在位置 2，最快的那对时钟读数是 (sin 2, cos 2) ≈ (0.9093, −0.4161)。这两个数会加到缩放后 cat 向量的前两维上，其余维度同理逐个相加。
+</div>
+<div class="card" id="fig-pos"></div>
+<p class="hint">加完之后形状没变，仍是 <span class="shape">3×10</span>，只是每一行里多了“我排第几”的信息。上图的位置编码数值是用公式真实算出来的；词向量部分是示意。</p>
+
+<details>
+<summary>位置编码的完整公式，以及为什么正余弦能表达“相对位置”（选读）</summary>
+<h3 style="margin-top:10px">① 公式本身</h3>
+<div class="formula">PE(pos, 2i) = sin( pos / 10000<sup>2i/d<sub>model</sub></sup> )　　PE(pos, 2i+1) = cos( pos / 10000<sup>2i/d<sub>model</sub></sup> )</div>
+<p>pos 是词的位置（0, 1, 2…），i = 0, 1, …, d<sub>model</sub>/2 − 1 是“第几对”，偶数维用 sin，奇数维用 cos。把第 i 对的频率记作</p>
+<div class="formula">ω<sub>i</sub> = 1 / 10000<sup>2i/d<sub>model</sub></sup></div>
+<p>那么第 i 对就是 (sin ω<sub>i</sub>·pos, cos ω<sub>i</sub>·pos)。本页 d<sub>model</sub>=10，所以 i=0..4：ω₀=1，ω₁=10000<sup>−0.2</sup>≈0.158，ω₂=10000<sup>−0.4</sup>≈0.025，依此类推——正是上面三个“时钟”的转速。</p>
+
+<h3>② 位置平移 = 旋转</h3>
+<p>对任意固定的偏移 k，用三角加法公式：</p>
+<div class="formula">sin ω(pos+k) = sin ω·pos · cos ωk + cos ω·pos · sin ωk<br>cos ω(pos+k) = cos ω·pos · cos ωk − sin ω·pos · sin ωk</div>
+<p>写成矩阵形式：</p>
+<div class="formula" style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
+  <span>(sin ω(pos+k), cos ω(pos+k))<sup>T</sup></span><span>=</span>
+  <span style="display:inline-grid;grid-template-columns:auto auto;gap:2px 14px;border-left:2px solid #555;border-right:2px solid #555;border-radius:6px;padding:2px 10px;font-size:.95em">
+    <span>cos ωk</span><span>sin ωk</span><span>−sin ωk</span><span>cos ωk</span></span>
+  <span>(sin ω·pos, cos ω·pos)<sup>T</sup></span>
+</div>
+<p>中间那个矩阵是旋转矩阵 R(ωk)。把 5 对拼起来，就是：</p>
+<div class="formula">PE<sub>pos+k</sub> = M<sub>k</sub> · PE<sub>pos</sub>，M<sub>k</sub> = diag( R(ω₀k), R(ω₁k), …, R(ω₄k) )</div>
+<p><b>关键点：M<sub>k</sub> 只依赖偏移 k，和 pos 无关。</b>所以“往后 k 步”在任何位置都对应同一个线性变换：I→like 与 like→cat 都隔一步，用的是同一个旋转。</p>
+
+<h3>③ 两个位置的点积只看距离</h3>
+<p>同一对内：sin ωp·sin ωq + cos ωp·cos ωq = cos ω(p−q)。把所有对加起来：</p>
+<div class="formula">PE<sub>p</sub> · PE<sub>q</sub> = Σ<sub>i=0..d/2−1</sub> cos( ω<sub>i</sub>·(p − q) )</div>
+<p>结果只和 p−q 有关，和绝对位置无关。</p>
+
+<h3>需要注意的限制</h3>
+<p>这些结构是编码<b>提供</b>的条件，模型具体怎么利用，由后面学出来的权重决定。另外：① 点积只看距离，指的是位置向量<b>本身</b>；经过 W<sub>Q</sub>、W<sub>K</sub> 投影后，Q·K 里的位置项就不再严格只依赖相对距离了。② 位置向量是<b>加</b>到词向量上的，注意力里会出现“词×位置”的交叉项。后来的 RoPE、相对位置偏置等方法，正是为了更直接地表达相对位置而提出的。</p>
+</details>
+
+<!-- ======================= 3 ======================= -->
+<h2 id="s3"><span class="n">3</span>自注意力：Q、K、V 到底是什么？</h2>
+<p>现在每个词都带着“词义 + 位置”。接下来让它们<b>互相交流</b>——这是整个 Transformer 的核心。</p>
+
+<div class="plain">
+想象你在图书馆查资料，一个词要做的事和你一样：<br>
+<span class="tag q">Q 查询</span>：你心里的问题——“我（cat）想找：谁在表达‘喜欢’这个动作？”<br>
+<span class="tag k">K 键</span>：每本书书脊上的标签——“我（like）是个动词，表示喜好”。<br>
+<span class="tag v">V 值</span>：书的正文——找到之后你<b>真正抄走</b>的内容。<br>
+先拿“问题”去和每个“标签”比对，算出相关度；再按相关度从每本书的“正文”里抄一点回来。
+</div>
+
+<h3>三个词、三张独立的“变身矩阵”</h3>
+<p>同一份输入 X（<span class="shape">3×10</span>），分别乘三张<b>各自训练出来</b>的矩阵，得到三种身份：</p>
+<div class="formula"><span class="q">Q</span> = X·W<sub>Q</sub>　　<span class="k">K</span> = X·W<sub>K</sub>　　<span class="v">V</span> = X·W<sub>V</sub>　　（W 都是 10×5，所以 Q、K、V 各是 3×5）</div>
+<p>为什么要三张而不是直接用 X？因为“用来被找到的特征（K）”和“被找到后要交出去的内容（V）”并不需要相同。比如 like 用“我是动词”来被匹配，却可以交出“喜好的程度、情感倾向”等另一组信息。分开之后，模型才有这个自由。</p>
+
+<div class="formula std">Q = X·W<sup>Q</sup>，K = X·W<sup>K</sup>，V = X·W<sup>V</sup>；　W<sup>Q</sup>, W<sup>K</sup> ∈ ℝ<sup>d<sub>model</sub>×d<sub>k</sub></sup>，W<sup>V</sup> ∈ ℝ<sup>d<sub>model</sub>×d<sub>v</sub></sup>
+<span class="where">单头时 d<sub>k</sub>=d<sub>v</sub>=d<sub>model</sub>；多头时 d<sub>k</sub>=d<sub>v</sub>=d<sub>model</sub>/h。本页每头 d<sub>k</sub>=d<sub>v</sub>=5。</span></div>
+<h3>Q 和 K 相乘：算“有多相关”</h3>
+<p>cat 的 <span class="q">Q</span> 和 like 的 <span class="k">K</span> 做点积（对应位置相乘再求和），得到<b>一个数字</b>：</p>
+<div class="formula">s<sub>cat,like</sub> = q<sub>cat</sub> · k<sub>like</sub> = Σ<sub>ℓ=1..5</sub> q<sub>cat,ℓ</sub>·k<sub>like,ℓ</sub> = |q|·|k|·cosθ</div>
+<div class="plain">点积就是在量“<b>两个箭头方向有多一致</b>”：方向一致 → 数很大（很相关）；互相垂直 → 0（无关）；方向相反 → 负数（排斥）。<br>
+这里“相关”不是字面相似，而是<b>训练学出来的相关</b>——比如让“动词”去找“和它搭配的名词”。</div>
+
+<div class="formula std">S = Q·K<sup>T</sup> ∈ ℝ<sup>n×n</sup>，　S<sub>ij</sub> = q<sub>i</sub>·k<sub>j</sub> = Σ<sub>ℓ=1..d<sub>k</sub></sub> q<sub>iℓ</sub>k<sub>jℓ</sub></div>
+<p>把所有词一起算，<span class="shape">Q(3×5) × Kᵀ(5×3) = S(3×3)</span>：第 i 行第 j 列就是“第 i 个词对第 j 个词的原始打分”。</p>
+
+<div class="card">
+<table style="text-align:center">
+<tr><th></th><th style="text-align:center">看 I</th><th style="text-align:center">看 like</th><th style="text-align:center">看 cat</th></tr>
+<tr><th>I 的 Q</th><td>·</td><td>·</td><td>·</td></tr>
+<tr><th>like 的 Q</th><td>·</td><td>·</td><td>·</td></tr>
+<tr style="background:var(--q-bg)"><th>cat 的 Q</th><td><b>0</b></td><td><b>2</b></td><td><b>4</b></td></tr>
+</table>
+<div class="hint">本页后面只盯着 cat 这一行，原始分数假设为 [0, 2, 4]。意思是：cat 觉得自己跟自己最相关（4），其次是 like（2），I 最不相关（0）。其他行用“·”省略。</div>
+</div>
+
+<!-- ======================= 4 ======================= -->
+<h2 id="s4"><span class="n">4</span>为什么要先除以 √5？</h2>
+<p>每个分数是 5 项乘积相加。如果每一项大致是均值 0、方差 1 的随机数，那么加起来的<b>方差是 5，标准差是 √5 ≈ 2.236</b>。维度越大，分数越容易“飘得很大”。</p>
+<p>分数很大会怎样？Softmax 会变得极端：一个位置接近 100%，其他接近 0。这时候梯度几乎为零，模型学不动。所以除以 √d<sub>k</sub> 把分数拉回合理范围：</p>
+<div class="formula">S̃ = S / √d<sub>k</sub>，d<sub>k</sub> = 5　→　cat 这行 [0, 2, 4] 变成 [0, 0.894, 1.789]</div>
+<div class="formula std">若 q<sub>ℓ</sub>, k<sub>ℓ</sub> 独立、均值 0、方差 1：　E[q·k] = 0，　Var(q·k) = d<sub>k</sub>　⟹　std(q·k) = √d<sub>k</sub>
+Attention(Q, K, V) = softmax( Q·K<sup>T</sup> / √d<sub>k</sub> ) · V
+<span class="where">这是原论文的缩放点积注意力（Scaled Dot-Product Attention）。除以 √d<sub>k</sub> 使打分的方差回到约 1。</span></div>
+<table>
+<tr><th>cat 对三个词</th><th>I</th><th>like</th><th>cat</th></tr>
+<tr><td>原始点积</td><td>0</td><td>2</td><td>4</td></tr>
+<tr><td>缩放后</td><td>0</td><td>0.894</td><td>1.789</td></tr>
+<tr><td>不缩放直接 Softmax</td><td>1.6%</td><td>11.7%</td><td><b>86.7%</b>（太尖了）</td></tr>
+<tr><td>缩放后 Softmax</td><td>10.6%</td><td>25.9%</td><td>63.5%（更平缓）</td></tr>
+</table>
+<p class="hint">排序没变（cat &gt; like &gt; I），变的是“有多偏心”。下一节的实验里可以直接对比。</p>
+
+<!-- ======================= 5 ======================= -->
+<h2 id="s5"><span class="n">5</span>Softmax 与乘 V：把“分数”变成“抄多少”</h2>
+<h3>Softmax：分数 → 分配比例</h3>
+<p>对 cat 的三个缩放分数，先各取指数 e<sup>x</sup>，再除以指数之和：</p>
+<div class="formula">P<sub>ij</sub> = exp(S̃<sub>ij</sub>) / Σ<sub>k</sub> exp(S̃<sub>ik</sub>)</div>
+<div class="formula std">S̃ = Q·K<sup>T</sup>/√d<sub>k</sub>，　P = softmax(S̃)（逐行），　P<sub>ij</sub> ≥ 0，　Σ<sub>j</sub> P<sub>ij</sub> = 1</div>
+<p>结果是三个非负数、总和为 1，可以理解为：<b>cat 手上有 100% 的注意力，怎么分给 I、like、cat</b>。cat 这行变成 <b>[0.106, 0.259, 0.635]</b>。每个词（每一行）各自单独分配，所以 P 仍是 <span class="shape">3×3</span>，每行和为 1。</p>
+<p>用指数有个好处：分数差一点，权重就拉开一截（like 比 I 高 0.894，权重就是 I 的 e<sup>0.894</sup> ≈ 2.45 倍）；而且它处处光滑可导，训练时能用梯度“微调该多看谁”。</p>
+
+<h3>乘 V：按比例把内容抄回来</h3>
+<p>知道要从 like 抄 26% 还不够，还得看 like 的<b>正文</b>（V）写了什么。cat 的新向量就是三个 V 的加权和：</p>
+<div class="formula">h<sub>cat</sub> ≈ 0.106·<span class="v">v<sub>I</sub></span> + 0.259·<span class="v">v<sub>like</sub></span> + 0.635·<span class="v">v<sub>cat</sub></span></div>
+<div class="formula std">h<sub>i</sub> = Σ<sub>j=1..n</sub> P<sub>ij</sub> v<sub>j</sub>，　即　H = P·V ∈ ℝ<sup>n×d<sub>v</sub></sup></div>
+<p>矩阵写法是 <span class="shape">P(3×3) × V(3×5) = H(3×5)</span>，三个词同时算完。这样 cat 的新向量里<b>已经混进了 I 和 like 的信息</b>。</p>
+
+<div class="lab">
+<h4>注意力计算器：拖动分数，看权重和输出怎么变</h4>
+<div class="row" style="margin-bottom:6px"><span>选一个发起查询的词：</span>
+  <button id="qb0" onclick="selQ(0)">I</button><button id="qb1" onclick="selQ(1)">like</button><button id="qb2" class="on" onclick="selQ(2)">cat</button>
+  <label style="margin-left:10px"><input type="checkbox" id="scaleOn" checked> 除以 √5（缩放）</label></div>
+<div id="attCtl"></div>
+<div style="margin-top:10px"><b>① Softmax 之后的注意力权重</b></div>
+<div id="attBars"></div>
+<div style="margin-top:10px"><b>② 乘 <span class="v">V</span>：</b>假设三个词的值向量第一维分别是 <span class="v">2、4、6</span>（原文的设定）</div>
+<div class="formula" id="attOut"></div>
+<div class="hint" id="attNote"></div>
+<p class="hint">cat 默认就是原文的 [0, 2, 4]，I 和 like 两行是我为演示随便设的示意分数。试试：把 √5 缩放关掉，再把 cat 的分数拉到 8，看权重怎么“塌”成一个词。</p>
+</div>
+
+<div class="plain">
+换句话说：<b>Q·K 决定“看谁、看多重”，Softmax 把它规整成分配方案，乘 V 才真正把内容取回并混合。</b><br>
+这就是一个可以求导的“软字典查询”——普通字典是精确匹配只返回一条，注意力是模糊匹配、返回所有条目的加权混合。
+</div>
+
+<p class="hint">训练时，翻译的误差会沿着 H=PV 同时传回 V 的投影，也沿着 P 传回 Q、K 的投影，三张矩阵就这样一起学出来。推理时它们都固定，但每句话算出来的分数和权重仍然不同。</p>
+
+<!-- ======================= 6 ======================= -->
+<h2 id="s6"><span class="n">6</span>多头注意力：同时戴几副“眼镜”</h2>
+<p>只有一套 Q/K/V，每个词只能用<b>一种</b>方式看别人。但语言里的关系有很多种：语法上的主谓、指代、位置邻近……所以把 10 维拆成<b>两个头</b>，每个头有自己的一套 W<sub>Q</sub>、W<sub>K</sub>、W<sub>V</sub>（各 10×5），各算各的，最后拼起来：</p>
+<div class="card">
+<div class="flow">
+  <div class="box">输入 X<small class="shape">3×10</small></div><div class="arrow">→</div>
+  <div>
+    <div class="box" style="margin-bottom:6px;border-color:var(--q)">头 1：Q₁ K₁ V₁（各 3×5）→ P₁(3×3) → H₁(3×5)</div>
+    <div class="box" style="border-color:var(--k)">头 2：Q₂ K₂ V₂（各 3×5）→ P₂(3×3) → H₂(3×5)</div>
+  </div><div class="arrow">→</div>
+  <div class="box">按列拼接<small class="shape">3×10</small></div><div class="arrow">→</div>
+  <div class="box">× W<sub>O</sub>(10×10)<small>让两个头的信息互相混合</small></div><div class="arrow">→</div>
+  <div class="box mem">A<small class="shape">3×10</small></div>
+</div>
+<div class="grid2" style="margin-top:10px">
+  <div><b style="color:var(--q)">头 1 里 cat 的分配</b>（原文数值）
+    <div id="h1bars"></div></div>
+  <div><b style="color:var(--k)">头 2 里 cat 的分配</b>（示意）
+    <div id="h2bars"></div></div>
+</div>
+<div class="hint">同一个 cat，在不同头里关注的对象可以完全不同。比如一个头专看“谁是动作”，另一个头专看“自己是谁”。</div>
+</div>
+<div class="formula std">MultiHead(Q, K, V) = Concat(head<sub>1</sub>, …, head<sub>h</sub>)·W<sup>O</sup>
+head<sub>i</sub> = Attention(Q·W<sub>i</sub><sup>Q</sup>, K·W<sub>i</sub><sup>K</sup>, V·W<sub>i</sub><sup>V</sup>)
+<span class="where">W<sub>i</sub><sup>Q</sup>, W<sub>i</sub><sup>K</sup> ∈ ℝ<sup>d<sub>model</sub>×d<sub>k</sub></sup>，W<sub>i</sub><sup>V</sup> ∈ ℝ<sup>d<sub>model</sub>×d<sub>v</sub></sup>，W<sup>O</sup> ∈ ℝ<sup>h·d<sub>v</sub>×d<sub>model</sub></sup>，d<sub>k</sub>=d<sub>v</sub>=d<sub>model</sub>/h。本页 h=2，d<sub>model</sub>=10，故 d<sub>k</sub>=5，W<sup>O</sup> 为 10×10。</span></div>
+<div class="plain">多头 = 请两位不同专长的同事各读一遍原文做笔记，最后把两份笔记拼在一起，再让一个人（W<sub>O</sub>）统一整理。输入输出都是 3×10，所以它可以接着往下接。</div>
+
+<!-- ======================= 7 ======================= -->
+<h2 id="s7"><span class="n">7</span>残差连接 + 层归一化（Add &amp; Norm）</h2>
+<p>注意力的输出 A 出来了，但不能直接用。原论文做两件事（Post-LN 顺序）：</p>
+<div class="formula">R = X + A　　　H = LayerNorm(R)</div>
+<div class="formula std">Post-LN（原论文）：　output = LayerNorm( x + Sublayer(x) )
+<span class="where">Sublayer 可以是多头注意力或 FFN。注意：现代模型多用 Pre-LN：x + Sublayer(LayerNorm(x))。</span></div>
+
+<h3>① 残差连接：在原稿上“批注”，而不是重写</h3>
+<div class="plain">X 是 cat 进入注意力前的向量，已经有词义和位置。A 是注意力从上下文里<b>收集来的补充信息</b>。把它们逐元素相加，意思是：<b>保留原来的，再叠加新学到的</b>。比如 cat 第一维原值 0.8，注意力给的更新量是 −0.1，相加得 0.7。<br>
+更重要的是训练：反向传播时梯度可以顺着“+”这条直路<b>一路传回去</b>，不用每次都穿过注意力，这是深层网络能训练起来的关键之一。</div>
+
+<h3>② 层归一化：把每个词的数值拉回统一尺度</h3>
+<p>对<b>每个词自己那一行</b>的 10 个数，算均值 μ 和标准差 σ，减均值、除以标准差，再用学出来的 γ、β 缩放平移：</p>
+<div class="formula">H<sub>pj</sub> = γ<sub>j</sub> · (R<sub>pj</sub> − μ<sub>p</sub>) / √(σ<sub>p</sub>² + ε) + β<sub>j</sub></div>
+<div class="formula std">μ<sub>p</sub> = (1/d) Σ<sub>j=1..d</sub> R<sub>pj</sub>，　σ<sub>p</sub>² = (1/d) Σ<sub>j=1..d</sub> (R<sub>pj</sub> − μ<sub>p</sub>)²，　d = d<sub>model</sub>
+<span class="where">γ, β ∈ ℝ<sup>d</sup> 为可学习参数；ε 是防止除零的小常数（如 10⁻⁵）。</span></div>
+<div class="plain">层层相加、相乘之后，数字可能越来越大或越来越小，后面的层就“吃不消”。层归一化像是<b>每层之后给每个词的数值统一调一下音量</b>，让下一层总是在差不多的范围里工作。每个词只看自己那一行，互不影响；γ、β 有 10 个数，三个词共享。</div>
+
+<div class="lab">
+<h4>把注意力的更新量放大，看归一化怎么“稳住”</h4>
+<div class="ctl"><span>A 放大 ×</span><input id="lnK" type="range" min="0.2" max="20" step="0.2" value="1"><b id="lnKv">1.0</b></div>
+<div id="lnFig"></div>
+<div class="hint" id="lnNote"></div>
+<div class="hint">示意数据：X 与 A 各是 10 个手写的数，k=1 时第一维正好是 0.8 + (−0.1) = 0.7，对应上文例子；这里取 γ=1、β=0。</div>
+</div>
+
+<!-- ======================= 8 ======================= -->
+<h2 id="s8"><span class="n">8</span>前馈网络 FFN：为什么注意力之后还要“再加工”？</h2>
+<p>先看注意力给了我们什么：</p>
+<table>
+<tr><th>矩阵</th><th>形状</th><th>cat 那一行是什么</th></tr>
+<tr><td>P（每头）</td><td>3×3</td><td>给 I、like、cat 各分多少权重</td></tr>
+<tr><td>H = P·V（每头）</td><td>3×5</td><td>三个位置的 V <b>按比例加权平均</b>出的 5 个特征</td></tr>
+<tr><td>A</td><td>3×10</td><td>两个头拼接并混合后的 10 个特征</td></tr>
+<tr><td>LayerNorm(X + A)</td><td>3×10</td><td>真正送进 FFN 的 10 个特征</td></tr>
+</table>
+<p>关键在这里：每个头输出的 H 本质上是 <b>V 的加权平均</b>——只是“混合”，没有做出新的特征组合。</p>
+
+<div class="plain">
+注意力和 FFN 的分工：<br>
+<b>注意力 = 词和词之间“传话”</b>（跨位置交换信息）；<br>
+<b>FFN = 每个词自己“动脑子”</b>（在位置内部做非线性加工）。<br>
+没有 FFN，堆再多层也只是反复“取平均”；有了 FFN，模型才能算出“a 和 b 的差”“这个模式是否出现”之类的新特征。
+</div>
+
+<h3>FFN 做三步：升维 → 激活 → 降维</h3>
+<div class="formula">Z = H·W₁ + b₁　　G = ReLU(Z) = max(0, Z)　　F = G·W₂ + b₂</div>
+<div class="formula std">FFN(x) = max(0, x·W<sub>1</sub> + b<sub>1</sub>)·W<sub>2</sub> + b<sub>2</sub>，　W<sub>1</sub> ∈ ℝ<sup>d<sub>model</sub>×d<sub>ff</sub></sup>，W<sub>2</sub> ∈ ℝ<sup>d<sub>ff</sub>×d<sub>model</sub></sup>
+<span class="where">逐位置独立作用于每个 token。原论文 d<sub>model</sub>=512，d<sub>ff</sub>=2048（4 倍）；本页 d<sub>model</sub>=10，d<sub>ff</sub>=20（2 倍，示意）。</span></div>
+<div class="card">
+<div class="flow">
+  <div class="box">H<small class="shape">3×10</small></div><div class="arrow">→<br><small class="hint">×W₁</small></div>
+  <div class="box">Z<small class="shape">3×20</small>升维：更多候选特征</div><div class="arrow">→<br><small class="hint">ReLU</small></div>
+  <div class="box">G<small class="shape">3×20</small>负的变 0，起“开关”作用</div><div class="arrow">→<br><small class="hint">×W₂</small></div>
+  <div class="box mem">F<small class="shape">3×10</small>降回原来的宽度</div>
+</div>
+<div class="hint">I、like、cat 共用同一套权重，每行只用自己的数据，互不交流，所以可以并行算。</div>
+</div>
+
+<h3>为什么要升维？为什么要 ReLU？</h3>
+<p><b>升维</b>：W₁ 的 20 列相当于 20 个“探测器”，每个探测器用不同的加权组合来检查这个词的特征，还有自己的偏置当作“门槛”。探测器越多，能组合出的新特征越多。<br>
+<b>ReLU</b>：负的变 0、正的保留，相当于“<b>这个探测器有没有被触发</b>”。没有它，两次矩阵乘法会合并成一次，等于白做（升不升维都一样）。</p>
+
+<div class="lab">
+<h4>用一个迷你 FFN 算“两个特征的差距”</h4>
+<p class="hint" style="margin-top:0">设 cat 向量里有两个特征 a、b。让三个隐藏单元分别计算 a+b、a−b、b−a，再过 ReLU。拖动 a、b 看哪些单元被触发。</p>
+<div class="ctl"><span>a</span><input id="fa" type="range" min="-3" max="3" step="0.1" value="2"><b id="fav">2.0</b></div>
+<div class="ctl"><span>b</span><input id="fb" type="range" min="-3" max="3" step="0.1" value="1"><b id="fbv">1.0</b></div>
+<div id="ffnBars"></div>
+<div class="formula" id="ffnOut"></div>
+<div class="hint">原文的例子：输入 [2,1] 得 [3,1,0]，输入 [1,2] 得 [3,0,1]——两个输入的“和”相同，但触发了不同的单元，降维时被读成不同的结果。把 ReLU(a−b)+ReLU(b−a) 相加，就得到了绝对差 |a−b|，这是线性层单独做不到的。</div>
+</div>
+
+<details>
+<summary>FFN 还有一层“知识库”的解释（研究观点，选读）</summary>
+<p>有研究（Geva 等，2021）把 FFN 看作<b>键值记忆</b>：第一层的每个神经元像一个“模式检测器”，第二层决定模式出现后“往向量里写什么”。另一项研究（Dong 等，2021）发现：只有注意力、没有残差和 FFN 的网络，层数一多各位置的表示会<b>越来越相似</b>。这些结论各自有前提条件，不等于已经把 Transformer 完全弄清楚，但解释了 FFN 为什么不可或缺。</p>
+</details>
+<p>FFN 之后，会再做一次 <code>LayerNorm(H + F)</code>（把 FFN 的输入 H 加回来，同样是残差 + 归一化），形状仍是 <span class="shape">3×10</span>。</p>
+
+<!-- ======================= 9 ======================= -->
+<h2 id="s9"><span class="n">9</span>编码器最后交出了什么？</h2>
+<div class="formula">M = LayerNorm(H + F)　　　<span class="shape">3×10</span></div>
+<div class="formula std">一层编码器：　H<sup>(l)</sup> = LayerNorm( X<sup>(l−1)</sup> + MultiHead(X<sup>(l−1)</sup>) )
+X<sup>(l)</sup> = LayerNorm( H<sup>(l)</sup> + FFN(H<sup>(l)</sup>) )，　l = 1..N
+M = X<sup>(N)</sup>，　X<sup>(0)</sup> = 嵌入 + 位置编码</div>
+<p>M 有三行，分别对应 I、like、cat。每一行都已经读过整句话：比如 cat 那行里，混进了从 like 那里收集来的信息。</p>
+<div class="card">
+<div class="flow">
+  <div class="box">I<small>10 维，含上下文</small></div>
+  <div class="box">like<small>10 维，含上下文</small></div>
+  <div class="box">cat<small>10 维，含上下文</small></div>
+  <div class="arrow">⇒</div>
+  <div class="box mem"><b>M</b>：原文的“理解笔记”<small>解码器每一层都会来查它</small></div>
+</div>
+</div>
+<p>推理时源句<b>只需编码一次</b>，之后每生成一个词，解码器都复用同一份 M；解码器每层还可以把投影好的 K、V 缓存起来，不用重算。</p>
+
+<!-- ======================= 10 ======================= -->
+<h2 id="s10"><span class="n">10</span>解码器入口：目标词嵌入、位置、因果掩码</h2>
+<h3>输入是什么？</h3>
+<p>解码器的输入是<b>目前已经生成的译文</b>。第一轮只有开始符 <code>SOS</code>（假设 ID=0）；如果模型生成了“我”（假设 ID=1），第二轮前缀就是 <code>[SOS, 我]</code>，以后每生成一个词就追加一个。处理方式和 §1、§2 完全一样：查目标语言的嵌入表 → 乘 √10 → 加位置编码（SOS 在位置 0，位置向量前两维是 [0, 1]；“我”在位置 1，是 [0.8415, 0.5403]）。</p>
+<div class="lab">
+<h4>逐词生成：点一下，前缀长一个</h4>
+<div id="genChips" class="chips big"></div>
+<div class="row" style="margin-top:6px"><button onclick="genStep()">生成下一个词 →</button><button onclick="genReset()">重来</button></div>
+<div class="hint" id="genNote"></div>
+</div>
+
+<h3>因果掩码：不许偷看答案</h3>
+<p>解码器自己的“自注意力”有个规则：<b>第 p 个词只能看第 p 个及之前的词，不能看后面的</b>。因为真正推理时，后面的词根本还没生成；训练时如果允许偷看，模型就会靠抄答案作弊，没法学会预测。</p>
+<p>做法是在 Softmax 之前，给不允许看的位置<b>加上 −∞</b>，变成指数后就是 0 权重：</p>
+<div class="formula">P = softmax( Q·Kᵀ / √5 + Mask )，Mask = [[0, −∞],[0, 0]]（两个词的前缀）</div>
+<div class="formula std">MaskedAttn(Q, K, V) = softmax( Q·K<sup>T</sup>/√d<sub>k</sub> + M<sub>mask</sub> )·V，　(M<sub>mask</sub>)<sub>ij</sub> = 0（j ≤ i），−∞（j &gt; i）
+<span class="where">下三角（含对角线）为 0，上三角为 −∞；exp(−∞)=0，所以未来位置的权重恒为 0。</span></div>
+<div class="lab">
+<h4>点击一行，看这个词“能看到谁”</h4>
+<div class="row"><label><input type="checkbox" id="maskOn" checked> 开启因果掩码</label></div>
+<div id="maskFig"></div>
+<div class="hint" id="maskNote"></div>
+</div>
+<div class="plain">位置编码告诉模型“每个词坐在第几格”，掩码规定“每个词能看哪几格”。一个管<b>标号</b>，一个管<b>视野</b>。</div>
+
+<!-- ======================= 11 ======================= -->
+<h2 id="s11"><span class="n">11</span>交叉注意力：译文去“翻”原文</h2>
+<p>解码器先做完带掩码的自注意力 + Add&amp;Norm，得到状态 R。然后进入最关键的一步：<b>用目前的中文状态，去英文的理解笔记 M 里找信息</b>。</p>
+<div class="formula"><span class="q">Q</span> = R·W<sub>Q</sub>（来自解码器）　　<span class="k">K</span> = M·W<sub>K</sub>，<span class="v">V</span> = M·W<sub>V</sub>（来自编码器）</div>
+<div class="formula std">CrossAttn(R, M) = softmax( (R·W<sup>Q</sup>)(M·W<sup>K</sup>)<sup>T</sup> / √d<sub>k</sub> )·(M·W<sup>V</sup>)，　P ∈ ℝ<sup>t×n<sub>src</sub></sup>
+C = MultiHead(R, M, M)，　R' = LayerNorm(R + C)
+<span class="where">t 为已生成译文长度，n<sub>src</sub> 为源句长度（本页 3）。无掩码。上文“C 加回 R”中的 C 就是交叉注意力的输出。</span></div>
+<div class="plain">
+这像一位译者：<b>Q</b> 是“我刚写完‘我’，下一个词该翻哪？”（来自译文）；<b>K</b> 是英文每个词的“索引标签”；<b>V</b> 是英文每个词的“实际内容”。<br>
+所以 Q 必须来自<b>提问的一方</b>（解码器），K、V 必须来自<b>被查阅的一方</b>（编码器的 M）。如果改用译文自己的 V，它只有 SOS、我 两个位置，根本没有英文的信息可取。
+</div>
+<div class="card">
+<div class="grid2">
+<div>
+  <b>“我” 发起的查询（示意权重）</b>
+  <div id="crossBars"></div>
+  <div class="hint">假设某个头里权重是 [0.1, 0.7, 0.2]：它取 0.1·v(I) + 0.7·v(like) + 0.2·v(cat)，主要从 like 取料，这正好能帮助预测中文的“<b>喜欢</b>”。</div>
+</div>
+<div>
+  <table>
+  <tr><th></th><th>形状（完整前缀计算）</th></tr>
+  <tr><td>R（译文状态）</td><td>2×10</td></tr>
+  <tr><td>M（英文理解）</td><td>3×10</td></tr>
+  <tr><td><span class="q">Q</span>=R·W<sub>Q</sub></td><td>2×5</td></tr>
+  <tr><td><span class="k">K</span>, <span class="v">V</span> = M·W</td><td>各 3×5</td></tr>
+  <tr><td>P = softmax(QKᵀ/√5)</td><td>2×3（行=目标位，列=源位）</td></tr>
+  <tr><td>H = P·V</td><td>2×5 → 两头拼接 2×10</td></tr>
+  </table>
+</div></div>
+</div>
+<p>这里没有掩码：源句三个词是已经给定的，全部可以看。之后 C 加回 R、层归一化，再过一次 FFN（同 §8）。</p>
+
+<!-- ======================= 12 ======================= -->
+<h2 id="s12"><span class="n">12</span>输出：Linear + Softmax → 下一个词</h2>
+<p>取最后一层解码器在“我”那个位置的 10 维向量 h。<b>Linear</b> 用一个 10×5 的矩阵 W<sub>out</sub>，给词表里每个候选词打一个分（叫 <b>logit</b>，可以是负数）：</p>
+<div class="formula">z = h·W<sub>out</sub>　　<span class="shape">1×10 × 10×5 = 1×5</span></div>
+<p>然后 <b>Softmax</b> 把这 5 个分数变成概率，沿<b>词表</b>方向归一化（注意：注意力里的 Softmax 是沿“被查阅的位置”归一化，两者方向不同）：</p>
+<div class="formula">p<sub>j</sub> = exp(z<sub>j</sub> − m) / Σ<sub>k</sub> exp(z<sub>k</sub> − m)，m = max z　（减最大值只是防止数值溢出，结果不变）</div>
+
+<div class="lab">
+<h4>词表概率 + 一个“温度”旋钮</h4>
+<div class="ctl"><span>温度 T</span><input id="tempS" type="range" min="0.2" max="3" step="0.1" value="1"><b id="tempV">1.0</b></div>
+<div id="outBars"></div>
+<div class="hint" id="outNote"></div>
+<div class="hint">T=1 时就是原文的表格：喜欢 70.76%、猫 14.29%、我 7.84%……（logits 为示意）。“温度”是常见的解码技巧，原教程没有，这里顺手放进来帮助理解：T 越小越“自信”、越接近贪心；T 越大越“发散”。</div>
+</div>
+<div class="formula std">z = h·W<sub>out</sub> + b，　p(y<sub>t</sub> = j | y<sub>&lt;t</sub>, x) = exp(z<sub>j</sub>/T) / Σ<sub>k=1..|V|</sub> exp(z<sub>k</sub>/T)，　T = 1 为标准 Softmax
+整句概率（自回归分解）：　P(y | x) = Π<sub>t=1..m</sub> P(y<sub>t</sub> | y<sub>&lt;t</sub>, x)
+训练损失（交叉熵）：　L = − Σ<sub>t=1..m</sub> log P(y<sub>t</sub><sup>*</sup> | y<sub>&lt;t</sub>, x)
+<span class="where">贪心解码：ŷ<sub>t</sub> = argmax<sub>j</sub> z<sub>j</sub>。y<sub>t</sub><sup>*</sup> 为训练时的标准答案词。</span></div>
+<p><b>贪心解码</b>就是每一步选概率最大的词。因为 Softmax 不改变大小顺序，直接取 logits 最大值效果一样。选出“喜欢”后，把它接到前缀，变成 <code>[SOS, 我, 喜欢]</code>，下一轮继续；等选出“猫”再选出 <code>EOS</code> 就停止。去掉结束符，最终译文就是 <b>“我喜欢猫”</b>。</p>
+<div class="plain">注意区分三层输出：<b>① 概率分布</b>（一行 5 个概率）→ <b>② 单轮选出的一个词</b> → <b>③ 反复多轮拼成的整句译文</b>。</div>
+
+<!-- ======================= 13 ======================= -->
+<h2 id="s13"><span class="n">13</span>一页总结：形状怎么一路变化</h2>
+<table>
+<tr><th>步骤</th><th>做了什么</th><th>形状</th><th>一句话直觉</th></tr>
+<tr><td>§1 嵌入</td><td>ID 查表</td><td>[1,3] → [1,3,10]</td><td>词 → 一串特征数字</td></tr>
+<tr><td>§2 位置</td><td>加正余弦向量</td><td>3×10 → 3×10</td><td>补上“排第几”</td></tr>
+<tr><td>§3 Q K V</td><td>三次线性投影（每头）</td><td>3×10 → 3×5 ×3</td><td>问题 / 标签 / 正文</td></tr>
+<tr><td>§3–4 打分</td><td>Q·Kᵀ/√5</td><td>3×3</td><td>互相有多相关</td></tr>
+<tr><td>§5 Softmax</td><td>每行归一化</td><td>3×3</td><td>注意力怎么分配</td></tr>
+<tr><td>§5 乘 V</td><td>P·V</td><td>3×5</td><td>按比例抄内容</td></tr>
+<tr><td>§6 多头</td><td>拼接 × W<sub>O</sub></td><td>3×10</td><td>多个视角合并</td></tr>
+<tr><td>§7 Add&amp;Norm</td><td>X+A，再逐行归一化</td><td>3×10</td><td>保留原稿 + 稳定尺度</td></tr>
+<tr><td>§8 FFN</td><td>10→20→10，中间 ReLU</td><td>3×10</td><td>每个词自己加工</td></tr>
+<tr><td>§9 输出 M</td><td>再一次 Add&amp;Norm</td><td>3×10</td><td>原文的理解笔记</td></tr>
+<tr><td>§10 解码入口</td><td>目标嵌入 + 位置 + 掩码</td><td>[1,t,10]</td><td>已写的译文，不偷看后面</td></tr>
+<tr><td>§11 交叉注意力</td><td>Q 来自译文，K、V 来自 M</td><td>P: t×3 → t×10</td><td>译文去原文里找料</td></tr>
+<tr><td>§12 输出</td><td>Linear → Softmax</td><td>1×10 → 1×5 → 概率</td><td>选出下一个词</td></tr>
+</table>
+
+<div class="card">
+<b>标准公式速查（全流程）</b>
+<div class="formula std" style="text-align:left">① 输入　X<sup>(0)</sup> = √d<sub>model</sub>·E[id] + PE
+② 注意力　Attention(Q,K,V) = softmax(QK<sup>T</sup>/√d<sub>k</sub>)·V
+③ 多头　MultiHead = Concat(head<sub>1..h</sub>)·W<sup>O</sup>，head<sub>i</sub> = Attention(XW<sub>i</sub><sup>Q</sup>, XW<sub>i</sub><sup>K</sup>, XW<sub>i</sub><sup>V</sup>)
+④ 残差+归一化　LayerNorm(x + Sublayer(x))，LN(r) = γ⊙(r−μ)/√(σ²+ε) + β
+⑤ 前馈　FFN(x) = max(0, xW<sub>1</sub>+b<sub>1</sub>)W<sub>2</sub>+b<sub>2</sub>
+⑥ 掩码　softmax(QK<sup>T</sup>/√d<sub>k</sub> + M<sub>mask</sub>)·V
+⑦ 交叉注意力　Q 来自解码器 R，K、V 来自编码器输出 M
+⑧ 输出　p = softmax(h·W<sub>out</sub> + b)，P(y|x) = Π<sub>t</sub> P(y<sub>t</sub>|y<sub>&lt;t</sub>, x)
+⑨ 位置编码　PE(pos,2i) = sin(pos/10000<sup>2i/d<sub>model</sub></sup>)，PE(pos,2i+1) = cos(pos/10000<sup>2i/d<sub>model</sub></sup>)</div>
+</div>
+
+<div class="callout-end">
+<p><b>一句话回到最初的问题：为什么注意力有效？</b></p>
+<p>因为它让每个词都能<b>根据内容、一步直达</b>地从整句话里挑选相关信息（Q·K → Softmax → ×V），而且所有位置可以并行计算，适合大规模训练；再配上 FFN 做加工、残差与归一化保证深层可训练，就构成了今天的大模型基石。</p>
+</div>
+
+<!-- ======================= 14 ======================= -->
+<h2 id="s14"><span class="n">14</span>常见疑问</h2>
+
+<details><summary>Q、K、V 是不是随便取的名字？为什么叫“查询、键、值”？</summary>
+<p>名字来自“字典/数据库查询”的比喻：用查询（Query）去匹配键（Key），取回对应的值（Value）。区别在于普通字典是精确匹配只返回一条，注意力是<b>可微的模糊匹配</b>，返回所有值的加权混合。这个思路和更早的“记忆网络”“软寻址”一脉相承。</p></details>
+
+<details><summary>注意力的 n×n 权重矩阵本身有语义吗？</summary>
+<p>它只是“路由方案”：谁给谁分了多少，不含内容。真正带内容的是乘 V 之后的输出。需要小心的是，“权重高 = 这个词对结果更重要”并不总是成立，学界对“注意力能不能当解释”一直有争论。</p></details>
+
+<details><summary>Transformer 现在被研究透彻了吗？</summary>
+<p>没有，工程跑在理论前面。比较清楚的是它的表达能力，以及一些具体电路（例如 induction heads：看到 “A B … A” 就倾向预测 B，和上下文学习密切相关）。有证据但没定论的包括 FFN 是不是知识库、深层表示趋同、上下文学习像不像在前向传播里做梯度下降。基本没搞懂的是规模变大后为什么会突然出现新能力、知识具体怎样分布在参数里。</p></details>
+
+<p class="hint" style="margin-top:50px">本页改写自用户提供的 Notion 教程导出文件；交互演示中的数值若标注“示意”，仅用于讲解。</p>
+</main>
+</div>
+
+<script>
+/* ---------- 小工具 ---------- */
+const $ = id => document.getElementById(id);
+const softmax = a => { const m=Math.max(...a); const e=a.map(x=>Math.exp(x-m)); const s=e.reduce((x,y)=>x+y,0); return e.map(x=>x/s); };
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; } }
+function cellColor(v){ // 蓝-白-橙 发散色
+  const t=Math.max(-1,Math.min(1,v));
+  if(t>=0){ const a=t; return `rgb(${255-Math.round(a*(255-224))},${255-Math.round(a*(255-138))},${255-Math.round(a*(255-30))})`; }
+  const a=-t; return `rgb(${255-Math.round(a*(255-59))},${255-Math.round(a*(255-111))},${255-Math.round(a*(255-212))})`;
+}
+function rowCells(arr){ return '<span class="cells">'+arr.map(v=>`<i title="${v.toFixed(3)}" style="background:${cellColor(v)}"></i>`).join('')+'</span>'; }
+function bars(el, labels, vals, colors, fmt){
+  el.innerHTML = labels.map((l,i)=>`<div class="bar"><div class="lbl">${l}</div><div class="track"><div class="fill" style="width:${Math.max(0,vals[i])*100}%;background:${colors[i%colors.length]}"></div></div><div class="val">${fmt?fmt(vals[i]):(vals[i]*100).toFixed(1)+'%'}</div></div>`).join('');
+}
+
+/* ---------- 交互式架构图 ---------- */
+(function(){
+  const W=230,H=36, CX={enc:200,dec:580};
+  const T={ // 类型配色
+    emb:{f:'#e4f5ec',s:'#2e9e6b'}, att:{f:'#fdf1de',s:'#e08a1e'}, nrm:{f:'#fff7d6',s:'#d4a90f'},
+    ffn:{f:'#e8effc',s:'#3b6fd4'}, out:{f:'#efeafb',s:'#7c5cd6'}, io:{f:'#fff',s:'#1f2937'}, mem:{f:'#d3efe0',s:'#2e9e6b'}
+  };
+  // 按数据流顺序排列
+  const B=[
+   {id:'ei',side:'enc',y:650,t:'io',label:'输入：I like cat',sub:'ID [0, 1, 2]',sec:1,title:'编码器输入',shape:'[1,3]',
+     desc:'英文句子被分词成 3 个 token，用词表换成 ID：I=0、like=1、cat=2。这就是整个编码器收到的原始输入。'},
+   {id:'ee',side:'enc',y:596,t:'emb',label:'词嵌入 Embedding',sub:'查表',sec:1,title:'词嵌入（查表）',shape:'[1,3] → [1,3,10]',
+     desc:'用 ID 当行号，去一张训练好的大表 E 里取出对应行，每个词变成一个 10 维向量。推理时这张表是固定的，同一个词永远查到同一行。'},
+   {id:'ep',side:'enc',y:542,t:'emb',label:'＋ 位置编码',sub:'√10·E + PE(p)',sec:2,title:'位置编码',shape:'3×10 → 3×10',
+     desc:'注意力是同时看所有词的，天生不知道顺序，所以给每个词加上一个由 sin/cos 公式生成的位置向量，告诉模型“你排第几”。形状不变。'},
+   {id:'ea',side:'enc',y:448,t:'att',label:'多头自注意力',sub:'Q K V · 2 个头',sec:'3',title:'多头自注意力（编码器）',shape:'X 3×10 → A 3×10',
+     desc:'每个词用 Q 去和所有词的 K 打分（除以 √5），Softmax 得到分配比例，再按比例混合各词的 V。两个头各算一遍，拼接后乘 W_O。编码器里没有掩码，I、like、cat 可以互相看见。'},
+   {id:'en1',side:'enc',y:394,t:'nrm',label:'Add & Norm',sub:'LayerNorm(X + A)',sec:7,title:'残差连接 + 层归一化',shape:'3×10',
+     desc:'把注意力之前的 X 加回去（保留原稿、叠加新信息），再对每个词自己那一行做层归一化，把数值拉回统一尺度。红色虚线就是这条“残差直路”。'},
+   {id:'ef',side:'enc',y:316,t:'ffn',label:'前馈网络 FFN',sub:'10 → 20 → 10 · ReLU',sec:8,title:'前馈网络 FFN（编码器）',shape:'3×10 → 3×20 → 3×10',
+     desc:'注意力只做了“加权平均”，FFN 才负责在每个词内部做非线性加工：升维、ReLU 开关、再降维。三个词共用同一套权重，互不交流，可以并行算。'},
+   {id:'en2',side:'enc',y:262,t:'nrm',label:'Add & Norm',sub:'LayerNorm(H + F)',sec:9,title:'第二次 Add & Norm',shape:'3×10',
+     desc:'把 FFN 的输入 H 加回 FFN 的输出 F，再做一次层归一化。真实模型会把“注意力 → Add&Norm → FFN → Add&Norm”这一整块堆叠 N 层（原论文 N=6），这里只演示一层。'},
+   {id:'em',side:'enc',y:190,t:'mem',label:'M：原文的理解笔记',sub:'3×10',sec:9,title:'编码器输出 M',shape:'3×10',
+     desc:'三行分别对应 I、like、cat，每一行都已经读过整句话。M 只需算一次，之后解码器每一步、每一层的交叉注意力都会来查它（绿色虚线）。'},
+   {id:'di',side:'dec',y:650,t:'io',label:'输入：<SOS> 我',sub:'已生成的译文（右移一位）',sec:10,title:'解码器输入',shape:'[1,t]',
+     desc:'解码器吃进去的是“目前已经写出的译文”。第一轮只有 SOS，生成“我”之后前缀变成 [SOS, 我]，以后每生成一个词就追加一个。这里演示 t=2 的时刻，要预测的是“喜欢”。'},
+   {id:'de',side:'dec',y:596,t:'emb',label:'词嵌入 Embedding',sub:'目标语言词表',sec:10,title:'目标词嵌入',shape:'[1,t] → [1,t,10]',
+     desc:'和编码器入口一样的查表操作，只是查的是目标语言（中文）的嵌入表。'},
+   {id:'dp',side:'dec',y:542,t:'emb',label:'＋ 位置编码',sub:'SOS 在 p=0，“我”在 p=1',sec:10,title:'位置编码',shape:'t×10 → t×10',
+     desc:'同样的正余弦位置向量：SOS 在位置 0，前两维是 [0, 1]；“我”在位置 1，前两维是 [0.8415, 0.5403]。'},
+   {id:'dm',side:'dec',y:466,t:'att',label:'带掩码的多头自注意力',sub:'因果掩码：不许偷看后面',sec:10,title:'掩码自注意力',shape:'t×10 → t×10',
+     desc:'译文内部的自注意力，但第 p 个词只能看第 p 个及之前的词：Softmax 之前把“后面”的分数加上 −∞，权重就变成 0。推理时后面的词还没生成，训练时不许偷看是为了防止作弊。'},
+   {id:'dn1',side:'dec',y:412,t:'nrm',label:'Add & Norm',sub:'',sec:7,title:'Add & Norm',shape:'t×10',
+     desc:'残差相加 + 层归一化，得到状态 R。'},
+   {id:'dc',side:'dec',y:346,t:'att',label:'多头交叉注意力',sub:'Q 来自译文 · K、V 来自 M',sec:11,title:'交叉注意力：译文去“翻”原文',shape:'Q: t×5 · K,V: 3×5 → t×10',
+     desc:'这是连接两半的桥：Q 来自解码器（“我刚写完‘我’，下一个词翻哪？”），K、V 来自编码器的 M。假设“我”给 [I, like, cat] 的权重是 [0.1, 0.7, 0.2]，主要从 like 取料，帮助预测“喜欢”。源句已全部给定，所以这里没有掩码。'},
+   {id:'dn2',side:'dec',y:292,t:'nrm',label:'Add & Norm',sub:'',sec:7,title:'Add & Norm',shape:'t×10',
+     desc:'把交叉注意力的输出 C 加回 R，再做层归一化。'},
+   {id:'df',side:'dec',y:226,t:'ffn',label:'前馈网络 FFN',sub:'10 → 20 → 10 · ReLU',sec:8,title:'前馈网络 FFN（解码器）',shape:'t×10 → t×20 → t×10',
+     desc:'和编码器里的 FFN 结构一样、参数各自独立：每个位置自己做一遍非线性加工。'},
+   {id:'dn3',side:'dec',y:172,t:'nrm',label:'Add & Norm',sub:'',sec:7,title:'Add & Norm',shape:'t×10',
+     desc:'最后一次残差 + 层归一化。真实模型里这一整块（掩码自注意力 → 交叉注意力 → FFN）同样堆叠 N 层。'},
+   {id:'dl',side:'dec',y:110,t:'out',label:'Linear',sub:'10 → 词表大小（演示为 5）',sec:12,title:'线性层',shape:'1×10 → 1×5',
+     desc:'取最后一个位置（“我”）的 10 维向量 h，乘 W_out，给词表里每个候选词打一个分（logit），可以为负。'},
+   {id:'ds',side:'dec',y:62,t:'out',label:'Softmax',sub:'沿词表方向归一化',sec:12,title:'Softmax → 概率',shape:'1×5',
+     desc:'把 5 个 logit 变成总和为 1 的概率：喜欢 70.76%、猫 14.29%、我 7.84%……（示意）。注意这里的 Softmax 沿“词表”归一化，和注意力里沿“被查阅位置”归一化方向不同。'},
+   {id:'do',side:'dec',y:14,t:'io',label:'输出：下一个词「喜欢」',sub:'贪心：取概率最大',sec:12,title:'输出下一个词',shape:'概率分布 → 1 个词',
+     desc:'贪心解码选概率最大的词：“喜欢”。把它接到前缀，变成 [SOS, 我, 喜欢]，整个解码器再跑一轮；一直到选出 EOS 为止，最终译文就是“我喜欢猫”。'}
+  ];
+  const FM={
+    ei:'id = (id<sub>1</sub>, …, id<sub>n</sub>)，id<sub>p</sub> ∈ {0,…,|V|−1}',
+    ee:'X<sub>emb</sub> = E[id]，E ∈ ℝ<sup>|V|×d<sub>model</sub></sup>',
+    ep:'X = √d<sub>model</sub>·X<sub>emb</sub> + PE<br>PE(pos,2i) = sin(pos/10000<sup>2i/d<sub>model</sub></sup>)，PE(pos,2i+1) = cos(pos/10000<sup>2i/d<sub>model</sub></sup>)',
+    ea:'MultiHead(X,X,X) = Concat(head<sub>1</sub>,…,head<sub>h</sub>)W<sup>O</sup><br>head<sub>i</sub> = softmax(QK<sup>T</sup>/√d<sub>k</sub>)V，Q=XW<sub>i</sub><sup>Q</sup>，K=XW<sub>i</sub><sup>K</sup>，V=XW<sub>i</sub><sup>V</sup>',
+    en1:'H = LayerNorm(X + MultiHead(X))<br>LN(r) = γ⊙(r−μ)/√(σ²+ε) + β',
+    ef:'FFN(h) = max(0, hW<sub>1</sub>+b<sub>1</sub>)W<sub>2</sub>+b<sub>2</sub>',
+    en2:'X<sup>(l)</sup> = LayerNorm(H + FFN(H))',
+    em:'M = X<sup>(N)</sup>（N 层编码器的输出）',
+    di:'y<sub>&lt;t</sub> = (SOS, y<sub>1</sub>, …, y<sub>t−1</sub>)',
+    de:'Y<sub>emb</sub> = E<sub>tgt</sub>[y<sub>&lt;t</sub>]，E<sub>tgt</sub> ∈ ℝ<sup>|V|×d<sub>model</sub></sup>',
+    dp:'Y = √d<sub>model</sub>·Y<sub>emb</sub> + PE',
+    dm:'softmax(QK<sup>T</sup>/√d<sub>k</sub> + M<sub>mask</sub>)V，(M<sub>mask</sub>)<sub>ij</sub> = 0（j≤i），−∞（j&gt;i）',
+    dn1:'R = LayerNorm(Y + MaskedAttn(Y))',
+    dc:'CrossAttn(R,M) = softmax((RW<sup>Q</sup>)(MW<sup>K</sup>)<sup>T</sup>/√d<sub>k</sub>)(MW<sup>V</sup>)',
+    dn2:'R′ = LayerNorm(R + CrossAttn(R,M))',
+    df:'FFN(x) = max(0, xW<sub>1</sub>+b<sub>1</sub>)W<sub>2</sub>+b<sub>2</sub>',
+    dn3:'O = LayerNorm(R′ + FFN(R′))',
+    dl:'z = h·W<sub>out</sub> + b，W<sub>out</sub> ∈ ℝ<sup>d<sub>model</sub>×|V|</sup>',
+    ds:'p<sub>j</sub> = exp(z<sub>j</sub>) / Σ<sub>k</sub> exp(z<sub>k</sub>)',
+    do:'ŷ<sub>t</sub> = argmax<sub>j</sub> p<sub>j</sub>；P(y|x) = Π<sub>t</sub> P(y<sub>t</sub>|y<sub>&lt;t</sub>,x)'
+  };
+  B.forEach(b=>{b.fm=FM[b.id]||'';});
+  const byId={}; B.forEach((b,i)=>{b.i=i; b.cx=CX[b.side]; byId[b.id]=b;});
+  const svg=$('archSvg'), NS='http://www.w3.org/2000/svg';
+
+  // 边（相邻方块的向上箭头），记录 from/to 方便高亮
+  const edges=[
+    ['ei','ee'],['ee','ep'],['ep','ea'],['ea','en1'],['en1','ef'],['ef','en2'],['en2','em'],
+    ['di','de'],['de','dp'],['dp','dm'],['dm','dn1'],['dn1','dc'],['dc','dn2'],['dn2','df'],['df','dn3'],['dn3','dl'],['dl','ds'],['ds','do']
+  ];
+  // 残差：[进入子层的上一个块, 子层, Add&Norm]
+  const resid=[['ep','ea','en1'],['en1','ef','en2'],['dp','dm','dn1'],['dn1','dc','dn2'],['dn2','df','dn3']];
+
+  let s=`<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#9a917c"/></marker>
+    <marker id="ahp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7c5cd6"/></marker>
+    <marker id="ahr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#d9534f"/></marker>
+    <marker id="ahg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2e9e6b"/></marker>
+  </defs>`;
+  // 标题与分组框
+  s+=`<text x="${CX.enc}" y="700" text-anchor="middle" font-size="15" font-weight="700" fill="#3b6fd4">编码器 Encoder</text>`;
+  s+=`<text x="${CX.dec}" y="700" text-anchor="middle" font-size="15" font-weight="700" fill="#7c5cd6">解码器 Decoder</text>`;
+  s+=`<rect x="${CX.enc-W/2-30}" y="252" width="${W+60}" height="252" rx="14" fill="#f4f7fd" stroke="#3b6fd4" stroke-dasharray="6 4" stroke-width="1.5"/>
+      <text x="${CX.enc+W/2+24}" y="272" text-anchor="end" font-size="14" font-weight="700" fill="#3b6fd4">× N 层</text>`;
+  s+=`<rect x="${CX.dec-W/2-30}" y="160" width="${W+60}" height="352" rx="14" fill="#f8f5fd" stroke="#7c5cd6" stroke-dasharray="6 4" stroke-width="1.5"/>
+      <text x="${CX.dec+W/2+24}" y="180" text-anchor="end" font-size="14" font-weight="700" fill="#7c5cd6">× N 层</text>`;
+  // 箭头
+  edges.forEach(([a,b],k)=>{ const A=byId[a],Bk=byId[b]; s+=`<path id="e_${a}_${b}" class="edge" d="M${A.cx} ${A.y} L${A.cx} ${Bk.y+H+1}" marker-end="url(#ah)"/>`; });
+  // 残差
+  resid.forEach(([p,sub,an],k)=>{
+    const P=byId[p],S=byId[sub],N=byId[an]; const y0=(P.y+S.y+H)/2, x=S.cx-W/2-16;
+    s+=`<path class="res" data-sub="${sub}" data-an="${an}" d="M${S.cx} ${y0} L${x} ${y0} L${x} ${N.y+H/2} L${N.cx-W/2-1} ${N.y+H/2}" marker-end="url(#ahr)"/>`;
+  });
+  // M → 交叉注意力
+  const M=byId.em, C=byId.dc;
+  s+=`<path id="mlink" class="mlink" d="M${M.cx+W/2} ${M.y+H/2} L${(M.cx+W/2+C.cx-W/2)/2+0} ${M.y+H/2} L${(M.cx+W/2+C.cx-W/2)/2} ${C.y+H/2} L${C.cx-W/2-1} ${C.y+H/2}" marker-end="url(#ahg)"/>
+      <text x="${(M.cx+W/2+C.cx-W/2)/2+6}" y="${(M.y+C.y)/2+20}" font-size="13" font-weight="700" fill="#2e9e6b">K、V</text>`;
+  // 方块
+  B.forEach(b=>{
+    const c=T[b.t], two=!!b.sub;
+    const lab=b.label.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const sb=(b.sub||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    s+=`<g class="blk" data-id="${b.id}" tabindex="0"><rect x="${b.cx-W/2}" y="${b.y}" width="${W}" height="${H}" rx="9" fill="${c.f}" stroke="${c.s}" stroke-width="2"/>
+      <text x="${b.cx}" y="${b.y+(two?15:H/2+5)}" text-anchor="middle" font-size="${two?13.5:14}" font-weight="700" fill="#1f2937">${lab}</text>
+      ${two?`<text x="${b.cx}" y="${b.y+29}" text-anchor="middle" font-size="10.5" fill="#6b7280">${sb}</text>`:''}</g>`;
+  });
+  s+=`<circle id="dot" class="flowdot" r="6" cx="-20" cy="-20" opacity="0"/>`;
+  svg.innerHTML=s;
+
+  let cur=-1, timer=null;
+  const info=$('archInfo');
+  function render(){
+    document.querySelectorAll('#archSvg .blk').forEach(g=>{
+      const b=byId[g.dataset.id];
+      g.classList.toggle('active',b.i===cur);
+      g.classList.toggle('done',cur>=0 && b.i<cur);
+      g.classList.toggle('dim',false);
+    });
+    const cb=B[cur];
+    document.querySelectorAll('#archSvg .edge').forEach(e=>{
+      const [,a,b]=e.id.split('_'); e.classList.toggle('hot',cur>=0 && byId[b].i<=cur && byId[a].i<byId[b].i);
+    });
+    document.querySelectorAll('#archSvg .res').forEach(r=>{
+      r.style.display=$('aRes').checked?'':'none';
+      r.classList.toggle('hot',cur>=0 && (byId[r.dataset.sub].i===cur||byId[r.dataset.an].i===cur));
+    });
+    $('mlink').classList.toggle('hot',cur>=0 && (cur===byId.em.i||cur===byId.dc.i));
+    if(cur<0){
+      info.innerHTML=`<h4>点任意方块，或按“下一步”</h4><p>左边的编码器把英文 <code>I like cat</code> 读成一份理解笔记 <b>M</b>；右边的解码器每次拿着“已经写出的中文 + M”预测<b>下一个词</b>。两边通过绿色虚线（交叉注意力）相连。</p><p class="hint">示意时刻：已经生成了 <code>SOS 我</code>，正在预测“喜欢”。</p>`;
+    }else{
+      const side=cb.side==='enc'?'编码器':'解码器';
+      info.style.borderLeftColor=T[cb.t].s;
+      info.innerHTML=`<h4><span class="stepno">${cb.i+1} / ${B.length}</span>${cb.title}</h4>
+        <div class="meta">${side} · 张量形状 <span class="shape">${cb.shape}</span></div>
+        <p>${cb.desc}</p><div class="formula std">${cb.fm}</div><p><a href="#s${cb.sec}">→ 跳到 §${cb.sec} 看详细讲解</a></p>`;
+    }
+    $('aPrev').disabled=cur<=0; $('aNext').disabled=cur>=B.length-1;
+    moveDot();
+  }
+  function moveDot(){
+    const d=$('dot'); if(cur<0){d.setAttribute('opacity',0);return;}
+    const b=B[cur]; d.setAttribute('cx',b.cx-W/2+14); d.setAttribute('cy',b.y+H/2); d.setAttribute('opacity',0.0);
+  }
+  function go(i){ cur=Math.max(0,Math.min(B.length-1,i)); render(); }
+  function stop(){ if(timer){clearInterval(timer);timer=null;$('aPlay').textContent='▶ 自动播放';} }
+  svg.addEventListener('click',e=>{ const g=e.target.closest('.blk'); if(g){stop();go(byId[g.dataset.id].i);} });
+  svg.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ const g=e.target.closest('.blk'); if(g){e.preventDefault();stop();go(byId[g.dataset.id].i);} } });
+  $('aNext').onclick=()=>{stop();go(cur+1)};
+  $('aPrev').onclick=()=>{stop();go(cur-1)};
+  $('aReset').onclick=()=>{stop();cur=-1;info.style.borderLeftColor='';render();};
+  $('aRes').addEventListener('change',render);
+  $('aPlay').onclick=()=>{
+    if(timer){stop();return;}
+    if(cur>=B.length-1) cur=-1;
+    $('aPlay').textContent='⏸ 暂停';
+    go(cur+1);
+    timer=setInterval(()=>{ if(cur>=B.length-1){stop();return;} go(cur+1); },1700);
+  };
+  render();
+})();
+
+/* ---------- §1 / §2 嵌入与位置 ---------- */
+(function(){
+  const words=['I','like','cat'], ids=[0,1,2];
+  const r=rng(7);
+  const E=ids.map(()=>Array.from({length:10},()=>(r()*2-1)));
+  const PE=p=>Array.from({length:10},(_,j)=>{const i=Math.floor(j/2); const w=Math.pow(10000,-2*i/10); return j%2===0?Math.sin(w*p):Math.cos(w*p);});
+  const X=E.map((e,p)=>e.map((v,j)=>Math.sqrt(10)*v*0.35+PE(p)[j])); // 仅用于上色示意：缩放系数压小方便显示
+  let h='<table style="width:auto"><tr><th>词</th><th>ID</th><th>查表得到的 10 维向量（E 的一行）</th></tr>';
+  words.forEach((w,i)=>{ h+=`<tr><td><span class="tok">${w}</span></td><td class="mono">${ids[i]}</td><td>${rowCells(E[i])}</td></tr>`; });
+  h+='</table><div class="hint">↑ 三行叠起来就是 3×10 的矩阵。每格一个数，蓝=负、橙=正，越深绝对值越大（示意）。</div>';
+  $('fig-embed').innerHTML=h;
+  let g='<div class="row" style="justify-content:center;align-items:flex-start">';
+  g+=`<div><b>词向量 ×√10</b>${E.map((e,i)=>`<div style="margin:4px 0"><span class="tok" style="min-width:40px">${words[i]}</span> ${rowCells(e.map(v=>v*0.35*Math.sqrt(10)/2))}</div>`).join('')}</div>`;
+  g+='<div class="big" style="align-self:center">＋</div>';
+  g+=`<div><b>位置向量 PE(p)（真实公式值）</b>${[0,1,2].map(p=>`<div style="margin:4px 0"><span class="tok" style="min-width:40px;background:#6b7280">p=${p}</span> ${rowCells(PE(p))}</div>`).join('')}</div>`;
+  g+='<div class="big" style="align-self:center">＝</div>';
+  g+=`<div><b>送入注意力的 X</b>${X.map((x,i)=>`<div style="margin:4px 0"><span class="tok" style="min-width:40px">${words[i]}</span> ${rowCells(x.map(v=>v/2))}</div>`).join('')}</div>`;
+  g+='</div>';
+  $('fig-pos').innerHTML=g;
+})();
+
+/* 时钟 */
+function setPos(p){ $('posSlider').value=p; drawClocks(); }
+function drawClocks(){
+  const p=+$('posSlider').value; $('posVal').textContent=p;
+  const ws=[1, Math.pow(10000,-2/10), Math.pow(10000,-4/10)];
+  const names=['最快的钟（i=0）','中速钟（i=1）','较慢的钟（i=2）'];
+  $('clocks').innerHTML=ws.map((w,k)=>{
+    const th=w*p, c=Math.cos(th), s=Math.sin(th), R=48, cx=60, cy=60;
+    return `<div style="text-align:center"><svg width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="#fff" stroke="#cfc7b4" stroke-width="2"/>
+      <line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#eee"/><line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#eee"/>
+      <line x1="${cx}" y1="${cy}" x2="${cx+R*c}" y2="${cy-R*s}" stroke="#7c5cd6" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="${cx+R*c}" cy="${cy-R*s}" r="5" fill="#7c5cd6"/></svg>
+      <div style="font-size:13px">${names[k]}</div>
+      <div class="mono" style="font-size:12px">sin=${s.toFixed(3)}<br>cos=${c.toFixed(3)}</div></div>`;
+  }).join('');
+  $('clockNote').textContent = p===2 ? '这正是 cat 的位置：最快的钟读数 (sin 2, cos 2) ≈ (0.909, −0.416)，与上文一致。' : '快钟转得飞快，慢钟几乎不动；三个钟的读数合在一起，就是这个位置的“指纹”。';
+}
+$('posSlider').addEventListener('input',drawClocks); drawClocks();
+
+/* ---------- §5 注意力计算器 ---------- */
+const attW=['I','like','cat'], attV=[2,4,6];
+const attScores=[[4,2,0],[1,3,1],[0,2,4]]; let attQ=2;
+const attPresetNote=['I 的分数是我设的示意：I 最关注自己。','like 的分数是我设的示意：like 同时关注 I 和 cat。','cat 的分数是原文的 [0, 2, 4]。'];
+function selQ(i){ attQ=i; [0,1,2].forEach(j=>$('qb'+j).classList.toggle('on',j===i)); buildAttCtl(); drawAtt(); }
+function buildAttCtl(){
+  $('attCtl').innerHTML=attW.map((w,j)=>`<div class="ctl"><span><b>${attW[attQ]}</b> 看 ${w}</span><input type="range" min="-4" max="10" step="0.1" value="${attScores[attQ][j]}" oninput="attScores[attQ][${j}]=+this.value;drawAtt()"><b id="sv${j}">${attScores[attQ][j].toFixed(1)}</b></div>`).join('');
+}
+function drawAtt(){
+  const sc=$('scaleOn').checked, raw=attScores[attQ], d=Math.sqrt(5);
+  const s=raw.map(x=>sc?x/d:x), p=softmax(s);
+  raw.forEach((x,j)=>$('sv'+j).textContent=x.toFixed(1));
+  bars($('attBars'),attW,p,['#3b6fd4','#e08a1e','#2e9e6b']);
+  const out=p.reduce((a,x,i)=>a+x*attV[i],0);
+  $('attOut').innerHTML=`h<sub>${attW[attQ]}</sub>(第1维) = ${p[0].toFixed(3)}×2 + ${p[1].toFixed(3)}×4 + ${p[2].toFixed(3)}×6 = <b>${out.toFixed(2)}</b>`;
+  const mx=Math.max(...p);
+  $('attNote').textContent=(sc?'已除以 √5。':'未缩放。')+attPresetNote[attQ].replace(/^/,'')+(mx>0.95?' 注意：权重已塌缩到一个词（≥95%），梯度会变得很小，这就是缩放要避免的情况。':'');
+}
+$('scaleOn').addEventListener('change',drawAtt); buildAttCtl(); drawAtt();
+
+/* ---------- §6 多头 ---------- */
+bars($('h1bars'),attW,softmax([0,2,4].map(x=>x/Math.sqrt(5))),['#3b6fd4']);
+bars($('h2bars'),attW,[0.55,0.30,0.15],['#e08a1e']);
+
+/* ---------- §7 层归一化演示 ---------- */
+const lnX=[0.8,-0.3,0.5,1.2,-0.7,0.1,0.9,-1.1,0.4,-0.2], lnA=[-0.1,0.6,-0.4,0.3,0.8,-0.5,0.2,0.7,-0.9,0.5];
+function stat(a){const m=a.reduce((x,y)=>x+y,0)/a.length; const v=a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length; return {m,sd:Math.sqrt(v)};}
+function barSvg(arr,axis,color){
+  const W=300,H=70,n=arr.length,bw=W/n; let s=`<svg width="${W}" height="${H}" style="background:#fff;border:1px solid #e7e2d8;border-radius:6px"><line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#ccc"/>`;
+  arr.forEach((v,i)=>{const h=Math.min(1,Math.abs(v)/axis)*(H/2-3); const y=v>=0?H/2-h:H/2; s+=`<rect x="${i*bw+3}" y="${y}" width="${bw-6}" height="${Math.max(h,1)}" fill="${color}" rx="2"/>`;});
+  return s+'</svg>';
+}
+function drawLN(){
+  const k=+$('lnK').value; $('lnKv').textContent=k.toFixed(1);
+  const Ak=lnA.map(x=>x*k), R=lnX.map((x,i)=>x+Ak[i]);
+  const {m,sd}=stat(R), H=R.map(x=>(x-m)/Math.sqrt(sd*sd+1e-5));
+  const axR=Math.max(...R.map(Math.abs),1);
+  $('lnFig').innerHTML=`<div class="grid2">
+  <div><b>相加后 R = X + ${k.toFixed(1)}·A</b><br>${barSvg(R,axR,'#e08a1e')}<div class="hint">均值 ${m.toFixed(2)}，标准差 <b>${sd.toFixed(2)}</b>（纵轴范围 ±${axR.toFixed(1)}）</div></div>
+  <div><b>层归一化之后 H</b><br>${barSvg(H,3,'#2e9e6b')}<div class="hint">均值 ${(H.reduce((a,b)=>a+b,0)/10).toFixed(2)}，标准差 <b>${stat(H).sd.toFixed(2)}</b>（纵轴范围固定 ±3）</div></div></div>`;
+  $('lnNote').textContent = k>=8 ? '更新量被放大很多倍后，R 的尺度完全变了；归一化之后依然是标准差≈1 的整齐一行，下一层看到的数据尺度始终稳定。' : '拖到更大，看左边 R 的尺度怎么膨胀，而右边始终保持整齐。';
+}
+$('lnK').addEventListener('input',drawLN); drawLN();
+
+/* ---------- §8 FFN 迷你演示 ---------- */
+function drawFFN(){
+  const a=+$('fa').value,b=+$('fb').value; $('fav').textContent=a.toFixed(1); $('fbv').textContent=b.toFixed(1);
+  const z=[a+b,a-b,b-a], g=z.map(x=>Math.max(0,x)), M=6;
+  $('ffnBars').innerHTML=['a+b','a−b','b−a'].map((l,i)=>`<div class="bar"><div class="lbl">ReLU(${l})</div><div class="track"><div class="fill" style="width:${Math.min(1,g[i]/M)*100}%;background:${g[i]>0?'#7c5cd6':'#ccc'}"></div></div><div class="val">${g[i].toFixed(1)}${z[i]<0?'（被关）':''}</div></div>`).join('');
+  $('ffnOut').innerHTML=`隐藏层 = [${g.map(x=>x.toFixed(1)).join(', ')}]　　把后两项相加 → |a−b| = <b>${(g[1]+g[2]).toFixed(1)}</b>`;
+}
+$('fa').addEventListener('input',drawFFN);$('fb').addEventListener('input',drawFFN);drawFFN();
+
+/* ---------- §10 生成与掩码 ---------- */
+const gen=['SOS','我','喜欢','猫','EOS']; let gi=0;
+function genDraw(){
+  $('genChips').innerHTML=gen.slice(0,gi+1).map((w,i)=>`<span class="tok" style="${i===gi?'background:#7c5cd6':''}">${w}</span>`).join('');
+  const nxt=gen[gi+1];
+  $('genNote').textContent = gi===0?'第 1 轮：前缀只有 SOS，位置 0。模型预测下一个词……' : (nxt?`第 ${gi+1} 轮：前缀有 ${gi+1} 个词。模型预测下一个词……`:'生成了 EOS，停止。去掉结束符，译文 = “我喜欢猫”。');
+  if(nxt) $('genNote').textContent += ` 得到「${nxt}」（教学设定的结果）`;
+}
+function genStep(){ if(gi<gen.length-1){gi++;} genDraw(); }
+function genReset(){ gi=0; genDraw(); }
+genDraw();
+
+const mt=['SOS','我','喜欢','猫']; let mrow=1;
+function drawMask(){
+  const on=$('maskOn').checked;
+  let h='<table class="mask"><tr><th></th>'+mt.map(w=>`<th>${w}</th>`).join('')+'</tr>';
+  mt.forEach((w,i)=>{ h+=`<tr><th style="text-align:right">${w} 看→</th>`+mt.map((_,j)=>{ const allowed=!on||j<=i; return `<td class="${allowed?'ok':'no'} ${i===mrow?'sel':''}" onclick="mrow=${i};drawMask()" style="cursor:pointer">${allowed?'可见':'遮住 −∞'}</td>`;}).join('')+'</tr>'; });
+  h+='</table>'; $('maskFig').innerHTML=h;
+  const vis=mt.filter((_,j)=>!on||j<=mrow);
+  $('maskNote').textContent=`「${mt[mrow]}」${on?'这一行只能读取：':'（无掩码）可以读取：'}${vis.join('、')}。${on?'后面的词对它的权重强制为 0。':'它能偷看后面的答案，训练时会作弊。'}`;
+}
+$('maskOn').addEventListener('change',drawMask); drawMask();
+
+/* ---------- §11 交叉注意力 ---------- */
+bars($('crossBars'),['I','like','cat'],[0.1,0.7,0.2],['#2e9e6b']);
+
+/* ---------- §12 输出 ---------- */
+const vocab=['SOS','我','喜欢','猫','EOS'], logits=[-1.0,0.2,2.4,0.8,-0.3];
+function drawOut(){
+  const T=+$('tempS').value; $('tempV').textContent=T.toFixed(1);
+  const p=softmax(logits.map(z=>z/T)), mi=p.indexOf(Math.max(...p));
+  bars($('outBars'),vocab,p,vocab.map((_,i)=>i===mi?'#7c5cd6':'#c9c2b0'));
+  $('outNote').textContent=`logits = [${logits.join(', ')}]　贪心选择：「${vocab[mi]}」（概率 ${(p[mi]*100).toFixed(1)}%）`;
+}
+$('tempS').addEventListener('input',drawOut); drawOut();
+</script>
+</body>
+</html>
